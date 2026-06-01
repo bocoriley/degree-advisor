@@ -89,6 +89,11 @@ def fmt(n):
     return f"{n:g}"
 
 
+def money(n):
+    """Format a dollar amount: 40000 -> $40,000."""
+    return f"${n:,.0f}"
+
+
 # --------------------------------------------------------------------------- #
 # Audit reading / parsing
 # --------------------------------------------------------------------------- #
@@ -221,21 +226,23 @@ def remaining_for(needs, floor):
     return remaining, driver
 
 
-def print_results(scenarios, cps, spy):
+def print_results(scenarios, cps, spy, cost_per_sem):
     base = scenarios[0]
     base_sem = math.ceil(base["remaining"] / cps)
-    base_year = base_sem / spy
+    base_cost = base_sem * cost_per_sem
 
     rows = []
     for s in scenarios:
         semesters = math.ceil(s["remaining"] / cps)
         years = semesters / spy
+        cost = semesters * cost_per_sem
         delta = ("baseline" if s is base else
-                 f"+{semesters - base_sem} sem, +{fmt(years - base_year)} yr")
+                 f"+{semesters - base_sem} sem, +{money(cost - base_cost)}")
         rows.append((s["label"], fmt(s["remaining"]), str(semesters),
-                     fmt(years), s["driver"], delta))
+                     fmt(years), money(cost), s["driver"], delta))
 
-    headers = ("Scenario", "Cr left", "Sem", "Years", "Driven by", "vs. baseline")
+    headers = ("Scenario", "Cr left", "Sem", "Years", "Cost",
+               "Driven by", "vs. baseline")
     widths = [max(len(headers[i]), max(len(r[i]) for r in rows))
               for i in range(len(headers))]
 
@@ -262,6 +269,7 @@ def main():
     spy = ask_number("Semesters per year", default=2, minimum=1, integer=True)
     count_in_progress = ask_yes_no(
         "Count in-progress credits as completed?", default=True)
+    cost_per_sem = ask_number("Cost per semester ($)", default=20000, minimum=0)
 
     # Baseline: your one declared major. We read your completed credits here,
     # once, since the cumulative total is the same in every audit.
@@ -299,7 +307,7 @@ def main():
                           "remaining": remaining, "driver": driver})
         print(f"  -> {label}: {fmt(remaining)} credits remaining.")
 
-    print_results(scenarios, cps, spy)
+    print_results(scenarios, cps, spy, cost_per_sem)
 
 
 if __name__ == "__main__":
