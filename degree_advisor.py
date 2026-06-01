@@ -32,7 +32,9 @@ total credits but too few upper-division ones would not be flagged.
 
 Assumptions (shown in the output so you can sanity-check): in-progress credits
 count as completed; a major's "additional area of study" requirement is covered
-by the minor / second major in the scenario (or by existing coursework).
+by the minor / second major in the scenario (or by existing coursework); terms
+alternate Fall then Spring (two a year), and the current term counts as the
+first remaining semester (so N semesters remaining graduates N-1 terms later).
 
 Standard library only.
 """
@@ -92,6 +94,41 @@ def fmt(n):
 def money(n):
     """Format a dollar amount: 40000 -> $40,000."""
     return f"${n:,.0f}"
+
+
+# --------------------------------------------------------------------------- #
+# Term arithmetic (two terms a year: Fall, then Spring of the next year)
+# --------------------------------------------------------------------------- #
+
+SEASONS = ("Fall", "Spring")
+
+
+def ask_term(prompt, default=None):
+    """Prompt for a term like 'Fall 2026'; return (season, year)."""
+    while True:
+        raw = ask_text(prompt, default)
+        parts = raw.split()
+        if len(parts) == 2 and parts[0].capitalize() in SEASONS and parts[1].isdigit():
+            return parts[0].capitalize(), int(parts[1])
+        print("  Please enter a term like 'Fall 2026'.")
+
+
+def next_term(term):
+    season, year = term
+    return ("Spring", year + 1) if season == "Fall" else ("Fall", year)
+
+
+def term_str(term):
+    return f"{term[0]} {term[1]}"
+
+
+def graduation_term(current, semesters):
+    """Term of the last remaining semester, counting the current term as the
+    first. 0 semesters remaining -> the current term."""
+    term = current
+    for _ in range(max(0, semesters - 1)):
+        term = next_term(term)
+    return term
 
 
 # --------------------------------------------------------------------------- #
@@ -226,7 +263,7 @@ def remaining_for(needs, floor):
     return remaining, driver
 
 
-def print_results(scenarios, cps, spy, cost_per_sem):
+def print_results(scenarios, cps, spy, cost_per_sem, current_term):
     base = scenarios[0]
     base_sem = math.ceil(base["remaining"] / cps)
     base_cost = base_sem * cost_per_sem
@@ -236,13 +273,14 @@ def print_results(scenarios, cps, spy, cost_per_sem):
         semesters = math.ceil(s["remaining"] / cps)
         years = semesters / spy
         cost = semesters * cost_per_sem
+        grad = term_str(graduation_term(current_term, semesters))
         delta = ("baseline" if s is base else
                  f"+{semesters - base_sem} sem, +{money(cost - base_cost)}")
         rows.append((s["label"], fmt(s["remaining"]), str(semesters),
-                     fmt(years), money(cost), s["driver"], delta))
+                     fmt(years), grad, money(cost), s["driver"], delta))
 
-    headers = ("Scenario", "Cr left", "Sem", "Years", "Cost",
-               "Driven by", "vs. baseline")
+    headers = ("Scenario", "Cr left", "Sem", "Years", "Graduates",
+               "Cost", "Driven by", "vs. baseline")
     widths = [max(len(headers[i]), max(len(r[i]) for r in rows))
               for i in range(len(headers))]
 
@@ -270,6 +308,8 @@ def main():
     count_in_progress = ask_yes_no(
         "Count in-progress credits as completed?", default=True)
     cost_per_sem = ask_number("Cost per semester ($)", default=20000, minimum=0)
+    current_term = ask_term("Your current term (e.g. Fall 2026)",
+                            default="Fall 2026")
 
     # Baseline: your one declared major. We read your completed credits here,
     # once, since the cumulative total is the same in every audit.
@@ -307,7 +347,7 @@ def main():
                           "remaining": remaining, "driver": driver})
         print(f"  -> {label}: {fmt(remaining)} credits remaining.")
 
-    print_results(scenarios, cps, spy, cost_per_sem)
+    print_results(scenarios, cps, spy, cost_per_sem, current_term)
 
 
 if __name__ == "__main__":
